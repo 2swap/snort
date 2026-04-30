@@ -2,6 +2,7 @@
  * This program strongly solves the game of Snort on a grid.
  */
 
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 #include <iostream>
@@ -151,11 +152,72 @@ public:
         memo[state] = value;
         return value;
     }
+    //your board states should be state.board[is_black_turn]=u64 to make everything easier here. u64 board[2]{};
+    int negamax(GameState state, bool is_black_turn,int alph=-1000,int beta=1000) {
+        int score;
+        bool finalized = is_finalized_get_score(state, score, is_black_turn);
+        int memo_val=1234; //sentinel val idk your system
+        state=canonicalize(state);
+        if (memo.contains(state)) memo_val=memo[state];
+        if (is_black_turn) {
+            if (finalized) return score;
+            if (memo_val!=1234){return memo_val;}
+        }
+        if (!is_black_turn) {
+            if (finalized) return -score;
+            if (memo_val!=1234){return -memo_val;}
 
-    int solve(const GameState& state, bool is_black_turn) {
-        return minimax(state, is_black_turn);
+        }
+        int value=-1000;
+        uint64_t legal_moves = legal_moves_for_player(state, is_black_turn);
+        std::vector<uint64_t> moves;
+        for (int x = 0; x < GRID_WIDTH; ++x) {
+            for (int y = 0; y < GRID_HEIGHT; ++y) {
+                uint64_t vertex = 1ULL << (y * 8 + x);
+                if (!(legal_moves & vertex)) continue;
+                moves.push_back(vertex);
+            }
+        }
+        //this is less efficient than o(n^2) sorting technically but i dont care to code it
+        //o(n^2) sorting relies on beta cutoffs, if the first move provides a beta cutoff then sorting is done in o(n) time, if the second move is a betacutoff, o(n+n-1) etc...
+        if (is_black_turn) {
+            std::ranges::sort(moves,[](uint64_t a,uint64_t b){return __builtin_popcountll(a)>__builtin_popcountll(b);});
+        }
+        else {
+            std::ranges::sort(moves,[](uint64_t a,uint64_t b){return __builtin_popcountll(a)>__builtin_popcountll(b);});
+        }
+        for (const uint64_t move:moves){
+            GameState next_state = state;
+            if (is_black_turn) {next_state.black |= move;}
+            else {next_state.white |= move;}
+            value = std::max(value, -negamax(next_state, !is_black_turn,-beta,-alph));
+            if (value>=beta){return value;}
+            if (value>alph) {
+                alph=value;
+            }
+        }
+        if (is_black_turn) {
+            memo[state]=value;
+        }
+        if (!is_black_turn) {
+            memo[state]=-value;
+        }
+        return value;
     }
 
+    int solve(const GameState& state, bool is_black_turn) {
+        return negamax(state, is_black_turn);
+    }
+//     1 2 3 4 5 6 7
+//
+// 1   1 2 3 1 2 1 2
+// 2   2 0 2 0 2 0 2
+// 3   3 2 2 1 2 1 2
+// 4   1 0 1 0 1 0
+// 5   2 2 2 1 2
+// 6   1 0 1 0
+// 7   2 2 2
+// 8   1 0 1
     void print_all_move_scores(const GameState& state, bool is_black_turn) {
         uint64_t legal_moves = legal_moves_for_player(state, is_black_turn);
         for (int y = 0; y < GRID_HEIGHT; ++y) {
